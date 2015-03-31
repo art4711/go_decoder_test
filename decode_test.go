@@ -199,7 +199,7 @@ func (fm fm)Reset(f io.Reader) {
 }
 
 /*
- * File I/O with brutal casting to read the data.
+ * ioutil.ReadAll with brutal casting to read the data.
  */
 type bc string
 
@@ -234,6 +234,48 @@ func (bc bc)OpenReader() (io.ReadCloser, error) {
 func (bc bc)Reset(f io.Reader) {
 	file := f.(*os.File)
 	file.Seek(0, os.SEEK_SET)
+}
+
+/*
+ * File I/O with ReadAt and brutal casting to read the data.
+ */
+type ba string
+
+func (ba ba)Generate(floatarr []float32) {
+	bi(ba).Generate(floatarr)
+}
+
+func (ba ba)ReadAndSum(f io.Reader, tb testing.TB) float32 {
+	b := make([]byte, size * 4)
+	fa := f.(io.ReaderAt)		// Relax, a proper interface wouldn't be designed this way anyway.
+	n, err := fa.ReadAt(b, 0)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	if n != size * 4 {
+		tb.Fatalf("readat: %v", n)
+	}
+
+	bsl := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+
+	fsl := *bsl
+	fsl.Len /= 4
+	fsl.Cap /= 4
+	floatarr := *(*[]float32)(unsafe.Pointer(&fsl))
+
+	s := float32(0)
+	for _, v := range floatarr {
+		s += v
+	}
+	return s
+}
+
+func (ba ba)OpenReader() (io.ReadCloser, error) {
+	return os.Open(string(ba))
+}
+
+func (ba ba)Reset(f io.Reader) {
+	// We use readat, no reason to do anything here.
 }
 
 /*
@@ -280,9 +322,10 @@ var (
 	fileMapTest = fm("float-file.fm")
 	gobTest = gb("float-file.gob")
 	bcTest = bc("float-file.bc")
+	baTest = ba("float-file.ba")
 )
 
-var toTest = [...]tested{ binTest, jsonTest, jsonDeflateTest, fileMapTest, gobTest, bcTest }
+var toTest = [...]tested{ binTest, jsonTest, jsonDeflateTest, fileMapTest, gobTest, bcTest, baTest }
 
 /* We're not testing encoding, just decoding. */
 func init() {
@@ -336,6 +379,10 @@ func BenchmarkReadBrutal(b *testing.B) {
 	genericBenchmark(b, bcTest)
 }
 
+func BenchmarkReadBrutalA(b *testing.B) {
+	genericBenchmark(b, baTest)
+}
+
 func genericTest(t *testing.T, te tested) {
 	file, err := te.OpenReader()
 	if err != nil {
@@ -370,5 +417,9 @@ func TestSumGob(t *testing.T) {
 
 func TestSumBrutal(t *testing.T) {
 	genericTest(t, bcTest)
+}
+
+func TestSumBrutalA(t *testing.T) {
+	genericTest(t, baTest)
 }
 

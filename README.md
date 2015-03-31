@@ -43,7 +43,7 @@ that needs to be read (it wasn't).
 Reader the file through `gob.Decode`. Maybe the standard wire format
 performs better (spoiler: it doesn't).
 
-### bc - normal file I/O with brutal casting
+### bc - ioutil.ReadALL I/O with brutal casting
 
 Reads the whole file with `ioutil.ReadAll`, takes the byte slice,
 casts it to `reflect.SliceHeader`, copies the slice header,
@@ -54,6 +54,13 @@ performs some brain surgery on it, casts it to our expected slice.
 Let's see how things perfom when we can use modern (30 years old)
 memory management facilities of an operating system and don't need
 to copy data back and forth.
+
+### ba - io.ReadAt I/O with brutal casting
+
+I didn't like that bc was doing more memory allocations than expected.
+So I figured I would try `io.ReadAt` to get my byte slice. For some
+reason This is faster than mmap and the (what I though was) equivalent
+C code. How the hell is ReadAt implemented?
 
 ## Results.
 
@@ -68,22 +75,24 @@ so much load on the machine that the test results are invalid anyway).
 encoding | consumption speed | file size | how much slower than best
 ---------|-------------------|-----------|--------------
 bi	| 130 MB/s	| 4MB	| 14x
-js	| 8.9 MB/s	| 11MB | 200x
+js	| 9.2 MB/s	| 11MB | 200x
 jd	| 6.8 MB/s	| 4.5MB | 260x
-gb	| 91 MB/s	| 5.9MB | 20x
+gb	| 90 MB/s	| 5.9MB | 20x
 bc	| 890 MB/s	| 4MB | 2x
-fm	| 1800 MB/s	| 4MB | -
+fm	| 1800 MB/s	| 4MB | 1x
+ba	| 1800 MB/s	| 4MB | 1x
 
 Raw data from one test run:
 
     $ go test -bench .
     PASS
-    BenchmarkReadBinary	      50	  32134617 ns/op	 130.52 MB/s	 8388691 B/op	       4 allocs/op
-    BenchmarkReadJSON	       5	 473621832 ns/op	   8.86 MB/s	54173700 B/op	 1026675 allocs/op
-    BenchmarkReadJDef	       2	 619920497 ns/op	   6.77 MB/s	54236812 B/op	 1027243 allocs/op
-    BenchmarkReadFmap	    1000	   2288824 ns/op	1832.51 MB/s	     273 B/op	       4 allocs/op
-    BenchmarkReadGob	      50	  46324650 ns/op	  90.54 MB/s	10384988 B/op	     320 allocs/op
-    BenchmarkReadBrutal	     500	   4714977 ns/op	 889.57 MB/s	16775280 B/op	      15 allocs/op
+    BenchmarkReadBinary	      50	  31304283 ns/op	 133.98 MB/s	 8388691 B/op	       4 allocs/op
+    BenchmarkReadJSON	       5	 456980729 ns/op	   9.18 MB/s	54173700 B/op	 1026675 allocs/op
+    BenchmarkReadJDef	       2	 614027465 ns/op	   6.83 MB/s	54236812 B/op	 1027243 allocs/op
+    BenchmarkReadFmap	    1000	   2315159 ns/op	1811.67 MB/s	     273 B/op	       4 allocs/op
+    BenchmarkReadGob	      50	  46407956 ns/op	  90.38 MB/s	10384992 B/op	     320 allocs/op
+    BenchmarkReadBrutal	     500	   4716730 ns/op	 889.24 MB/s	16775280 B/op	      15 allocs/op
+    BenchmarkReadBrutalA	    1000	   2306147 ns/op	1818.75 MB/s	 4194304 B/op	       1 allocs/op
 
 ### Additional result.
 
