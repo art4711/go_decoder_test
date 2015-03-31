@@ -1,0 +1,63 @@
+/*
+ * Copyright (c) 2015 Artur Grabowski <art@blahonga.org>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <assert.h>
+
+/*
+ * stopwatch comes from github.com/art4711/timing
+ */
+#include "stopwatch.h"
+
+
+#define SIZE 1024*1024
+
+int
+main(int argc, char **argv)
+{
+	int fd = open("float-file.bin", O_RDONLY);
+	double totbytes = 0;
+	struct stopwatch sw;
+	float arr[SIZE];
+	int r;
+
+	assert(fd != -1);
+
+	stopwatch_reset(&sw);
+	stopwatch_start(&sw);
+	for (r = 0; r < 500; r++) {
+		ssize_t sz = pread(fd, arr, sizeof(arr), 0);
+		float sum = 0;
+		int i;
+
+		assert(sz == sizeof(arr));
+		for (i = 0; i < SIZE; i++)
+			sum += arr[i];
+		if (r == 0)
+			printf("sum: %f\n", sum);
+		totbytes += sizeof(arr);
+	}
+	stopwatch_stop(&sw);
+
+	double t = stopwatch_to_ns(&sw);
+
+	printf("%f seconds, %f MB/s\n", t, (totbytes * 1024.0/ t));
+
+	return 0;
+}
