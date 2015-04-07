@@ -58,9 +58,29 @@ to copy data back and forth.
 ### ba - io.ReadAt I/O with brutal casting
 
 I didn't like that bc was doing more memory allocations than expected.
-So I figured I would try `io.ReadAt` to get my byte slice. For some
-reason This is faster than mmap and the (what I though was) equivalent
-C code. How the hell is ReadAt implemented?
+So I figured I would try `io.ReadAt` to get my byte slice. Yup, even
+better.
+
+### sl - sqlite3
+
+Just put all values into a one-column table in Sqlite3. Fetch all rows
+(sorted). I'm expecting this benchmark to run on a geological time
+scale.
+
+### bx - more or less equivalent to bi
+
+Just to study the code of encoding/binary I extracted the relevant
+parts of its code. This performs more or less the same as bi which
+is a good indication that I found the right code.
+
+### by - various experiments on how to make bx faster
+
+Here I performed experiments to see how to make encoding/binary
+faster. Trying to get the reflection based code fast failed,
+everything I tried gave at most 50% speed improvements (like not
+trying to figure out the type of the value of every slice element over
+and over and over again). So let's see how encoding/binary would
+perform if floats had a fast path just like ints.
 
 ## Results.
 
@@ -70,29 +90,35 @@ generated on test startup it will be in the buffer cache during the
 test so we shouldn't be hitting the disk at all (if we do then there's
 so much load on the machine that the test results are invalid anyway).
 
-(creative rounding below)
+(rounding to 2 significant digits below)
 
-encoding | consumption speed | file size | how much slower than best
----------|-------------------|-----------|--------------
-bi	| 130 MB/s	| 4MB	| 14x
-js	| 9.2 MB/s	| 11MB | 200x
-jd	| 6.8 MB/s	| 4.5MB | 260x
-gb	| 90 MB/s	| 5.9MB | 20x
-bc	| 890 MB/s	| 4MB | 2x
-fm	| 1800 MB/s	| 4MB | 1x
-ba	| 1800 MB/s	| 4MB | 1x
+encoding | consumption speed | file size |
+---------|-------------------|-----------|
+bi	| 120 MB/s	| 4MB	|
+js	| 8.0 MB/s	| 11MB	| 
+jd	| 6.0 MB/s	| 4.5MB | 
+fm	| 3400 MB/s	| 4MB	| 
+gb	| 90 MB/s	| 5.9MB |
+bc	| 624 MB/s	| 4MB	|
+ba	| 1367 MB/s	| 4MB	| 
+sl	| 2.6 MB/s	| 18MB	|
+bx	| 130 MB/s	| 4MB	|
+by	| 540 MB/s	| 540MB	|
 
 Raw data from one test run:
 
     $ go test -bench .
     PASS
-    BenchmarkReadBinary	      50	  31304283 ns/op	 133.98 MB/s	 8388691 B/op	       4 allocs/op
-    BenchmarkReadJSON	       5	 456980729 ns/op	   9.18 MB/s	54173700 B/op	 1026675 allocs/op
-    BenchmarkReadJDef	       2	 614027465 ns/op	   6.83 MB/s	54236812 B/op	 1027243 allocs/op
-    BenchmarkReadFmap	    1000	   2315159 ns/op	1811.67 MB/s	     273 B/op	       4 allocs/op
-    BenchmarkReadGob	      50	  46407956 ns/op	  90.38 MB/s	10384992 B/op	     320 allocs/op
-    BenchmarkReadBrutal	     500	   4716730 ns/op	 889.24 MB/s	16775280 B/op	      15 allocs/op
-    BenchmarkReadBrutalA	    1000	   2306147 ns/op	1818.75 MB/s	 4194304 B/op	       1 allocs/op
+    BenchmarkReadBinary	      50	  35737438 ns/op	 117.36 MB/s	 8388690 B/op	       4 allocs/op
+    BenchmarkReadJSON	       2	 525182241 ns/op	   7.99 MB/s	54173740 B/op	 1026677 allocs/op
+    BenchmarkReadJDef	       2	 696049978 ns/op	   6.03 MB/s	54236860 B/op	 1027243 allocs/op
+    BenchmarkReadFmap	    1000	   1227830 ns/op	3416.03 MB/s	      32 B/op	       1 allocs/op
+    BenchmarkReadGob	      50	  51869066 ns/op	  80.86 MB/s	10384991 B/op	     320 allocs/op
+    BenchmarkReadBrutal	     200	   6716936 ns/op	 624.44 MB/s	16775281 B/op	      15 allocs/op
+    BenchmarkReadBrutalA	     500	   3066435 ns/op	1367.81 MB/s	 4194304 B/op	       1 allocs/op
+    BenchmarkReadSqlite3	       1	1596527775 ns/op	   2.63 MB/s	71190440 B/op	 2097197 allocs/op
+    BenchmarkReadBinx	     100	  32981009 ns/op	 127.17 MB/s	 8388673 B/op	       4 allocs/op
+    BenchmarkReadBiny	     200	   7741075 ns/op	 541.82 MB/s	 8388651 B/op	       3 allocs/op
 
 ### Additional result.
 
@@ -109,15 +135,40 @@ entirely raw). JSON is slow even though I didn't expect it to be so
 catastrophically slow. Compressed JSON is even slower (tested to rule
 out file size that could be the reason for JSON to be slow).
 
+What surprised me the most was how sqlite3 didn't perform that bad at
+all. It's the worst possible database schema and we still a third of
+the performance of JSON. Shoving multiple values into the same row did
+speed it up by a factor of 2 or so, I suspect the cost is actually in
+the reflections in rows.Scan, not the database itself.
+
 Breaking the rules of course gives us better performance, but I didn't
 expect it to be so much better. Even the raw encoding/binary is 6
 times slower than the brutal cast that does the same amount of file
 I/O and should do the same amount of memory allocations (but somehow
-does twice).
+does twice (I figured it out, ioutil.ReadAll does something stupid,
+io.ReadAt doesn't, reflected in the `ba` test)). Mmap and a brutal
+cast, of course, outperforms everything by a wide margin, as it should
+be.
 
 I understand that modern systems are all about sending JSON over HTTP,
 but that's no excuse for a systems programming language to be so far
 away from decent performance when it comes to reading raw data.
+
+The most hilarious thing was when I dug even deeper in `by`. We go
+through all the effort to properly decode the data through
+endian-independent wrappers so that we don't switch on the endianness
+of the machine we're running on, all is done with type safety and how
+modern, pretty, well-written code should be written without any
+assumptions about how memory works and then at the end (this is from
+the math package):
+
+    func Float32frombits(b uint32) float32 { return *(*float32)(unsafe.Pointer(&b)) }
+
+So deep down, even the go programmers gave up at this level. Which
+makes the whole effort completely wasted, we end up with a brutal
+cast anyway. You can't abstract away data and memory. Your code is
+running on a computer, not a mathematically and philosophically pure
+computer science device.
 
 ## Code
 
