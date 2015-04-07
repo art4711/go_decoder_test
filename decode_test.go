@@ -32,6 +32,7 @@ import (
 	"reflect"
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
+	"errors"
 )
 
 const size = 1024*1024
@@ -331,7 +332,7 @@ func (d *bxcoder)value(v reflect.Value) {
 	case reflect.Float32:
 		v.SetFloat(float64(math.Float32frombits(d.uint32())))
 	default:
-		panic("wtf")
+		panic("this is not a generic implementation")
 	}
 }
 
@@ -348,11 +349,71 @@ func (bx *bx)ReadAndSum(tb testing.TB) float32 {
 	}
 	bxc.value(v)
 
+	s := float32(0)
+	for _, v := range floatarr {
+		s += v
+	}
+	return s
+}
+
 /*
-	if err := binary.Read(bx.f, binary.LittleEndian, floatarr); err != nil {
+ * Same as bx, but let's try to be smart about it.
+ *
+ * Getting the reflection based code fast failed, everything I tried
+ * gave at most 50% speed improvements (like not trying to figure out
+ * the type of the value of every slice element). So let's see
+ * how encoding/binary would perform if floats had a fast path.
+ */
+
+type by struct {
+	simpleFile
+	binFile
+}
+
+func intDataSize(data interface{}) int {
+	switch data := data.(type) {
+	case []float32:
+		return 4 * len(data)
+	}
+	return 0
+}
+
+func u32(b []byte) uint32 {
+	return (uint32(b[0]) | uint32(b[1]) << 8 | uint32(b[2]) << 16 | uint32(b[3]) << 24)
+}
+
+func (by *by)read(r io.Reader, data interface{}) error {
+        if n := intDataSize(data); n != 0 {
+                var b [8]byte
+                var bs []byte
+                if n > len(b) {
+                        bs = make([]byte, n)
+                } else {
+                        bs = b[:n]
+                }
+                if _, err := io.ReadFull(r, bs); err != nil {
+                        return err
+                }
+		switch data := data.(type) {
+		case []float32:
+			for i := range data {
+				data[i] = math.Float32frombits(u32(bs[4*i:]))
+			}
+		}
+		return nil
+	}
+	return errors.New("not reached, please")
+}
+
+
+func (by *by)ReadAndSum(tb testing.TB) float32 {
+	floatarr := make([]float32, size)
+
+	err := by.read(by.f, floatarr)
+	if err != nil {
 		tb.Fatal(err)
 	}
-*/
+
 	s := float32(0)
 	for _, v := range floatarr {
 		s += v
@@ -458,6 +519,7 @@ const (
 	T_BA
 	T_SL
 	T_BX
+	T_BY
 )
 
 type tt struct{
@@ -474,6 +536,7 @@ var toTest = [...]tt{
 	T_BA: { &ba{}, "float-file.ba" },
 	T_SL: { &sl{}, "float-file.sl" },
 	T_BX: { &bx{}, "float-file.bx" },
+	T_BY: { &by{}, "float-file.by" },
 }
 
 /* We're not testing encoding, just decoding. */
@@ -541,6 +604,10 @@ func BenchmarkReadBinx(b *testing.B) {
 	genericBenchmark(b, T_BX)
 }
 
+func BenchmarkReadBiny(b *testing.B) {
+	genericBenchmark(b, T_BY)
+}
+
 func genericTest(t *testing.T, which int) {
 	te := toTest[which]
 	err := te.tt.OpenReader(te.fname)
@@ -588,4 +655,8 @@ func TestSumSqlite3(t *testing.T) {
 
 func TestSumBinx(t *testing.T) {
 	genericTest(t, T_BX)
+}
+
+func TestSumBiny(t *testing.T) {
+	genericTest(t, T_BY)
 }
