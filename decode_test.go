@@ -304,6 +304,7 @@ func (gb *gb)ReadAndSum(tb testing.TB) float32 {
 
 type sl struct {
 	db *sql.DB
+	stmt *sql.Stmt
 }
 
 func (sl *sl)Generate(fname string, floatarr []float32) {
@@ -335,14 +336,24 @@ func (sl *sl)Generate(fname string, floatarr []float32) {
 	}
 	tx.Commit()
 	stmt.Close()
+
+}
+
+func (sl *sl)OpenReader(fname string) error {
+	db, err := sql.Open("sqlite3", fname)
+	if err != nil {
+		return err
+	}
+	sl.db = db
+	sl.stmt, err = sl.db.Prepare("select value from foo order by id")
+	if err != nil {
+		panic(err)
+	}
+	return err
 }
 
 func (sl *sl)ReadAndSum(tb testing.TB) float32 {
-	stmt, err := sl.db.Prepare("select value from foo order by id")
-	if err != nil {
-		tb.Fatal(err)
-	}
-	rows, err := stmt.Query()
+	rows, err := sl.stmt.Query()
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -367,15 +378,6 @@ func (sl *sl)ReadAndSum(tb testing.TB) float32 {
 		s += v
 	}
 	return s
-}
-
-func (sl *sl)OpenReader(fname string) error {
-	db, err := sql.Open("sqlite3", fname)
-	if err != nil {
-		return err
-	}
-	sl.db = db
-	return err
 }
 
 func (sl *sl)Reset() {
