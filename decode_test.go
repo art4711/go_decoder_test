@@ -314,13 +314,13 @@ type tt struct{
 	fname string
 }
 var toTest = [...]tt{
-	{ &bi{}, "float-file.bin" },
-	{ &js{}, "float-file.json" },
-	{ &jd{}, "float-file.json.z" },
-	{ &fm{}, "float-file.fm" },
-	{ &gb{}, "float-file.gob" },
-	{ &bc{}, "float-file.bc" },
-	{ &ba{}, "float-file.ba" },
+	T_BI: { &bi{}, "float-file.bin" },
+	T_JS: { &js{}, "float-file.json" },
+	T_JD: { &jd{}, "float-file.json.z" },
+	T_FM: { &fm{}, "float-file.fm" },
+	T_GB: { &gb{}, "float-file.gob" },
+	T_BC: { &bc{}, "float-file.bc" },
+	T_BA: { &ba{}, "float-file.ba" },
 }
 
 /* We're not testing encoding, just decoding. */
