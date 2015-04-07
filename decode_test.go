@@ -358,11 +358,6 @@ func (bx *bx)ReadAndSum(tb testing.TB) float32 {
 
 /*
  * Same as bx, but let's try to be smart about it.
- *
- * Getting the reflection based code fast failed, everything I tried
- * gave at most 50% speed improvements (like not trying to figure out
- * the type of the value of every slice element). So let's see
- * how encoding/binary would perform if floats had a fast path.
  */
 
 type by struct {
