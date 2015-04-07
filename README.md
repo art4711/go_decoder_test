@@ -122,9 +122,12 @@ Raw data from one test run:
 
 ### Additional result.
 
-An C program equivalent to bc performs only 1.2x faster (slightly
-above 1GB/s), so the problem is not in the I/O subsystem in Go, it's
-all in the decoding and encoding.
+An C program equivalent to `ba` performs only 1.5x faster (around
+2GB/s), so the problem is not in the I/O subsystem in Go, it's all in
+the decoding and encoding. Something equivalent to fmap performs 1.2x
+faster. Except if the mmap:ed array isn't `volatile` and we don't use
+the sum which allows the compiler to optimize away everything and then
+it actually performs 1132712x faster.
 
 ## Conclusion
 

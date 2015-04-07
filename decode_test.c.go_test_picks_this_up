@@ -19,6 +19,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <assert.h>
+#include <string.h>
+#include <sys/mman.h>
 
 /*
  * stopwatch comes from github.com/art4711/timing
@@ -35,9 +37,12 @@ main(int argc, char **argv)
 	double totbytes = 0;
 	struct stopwatch sw;
 	float arr[SIZE];
+	float sum2;
 	int r;
 
 	assert(fd != -1);
+
+	memset(arr, 0, sizeof(arr));
 
 	stopwatch_reset(&sw);
 	stopwatch_start(&sw);
@@ -49,15 +54,37 @@ main(int argc, char **argv)
 		assert(sz == sizeof(arr));
 		for (i = 0; i < SIZE; i++)
 			sum += arr[i];
-		if (r == 0)
-			printf("sum: %f\n", sum);
 		totbytes += sizeof(arr);
+		sum2 += sum;
 	}
 	stopwatch_stop(&sw);
 
 	double t = stopwatch_to_ns(&sw);
 
-	printf("%f seconds, %f MB/s\n", t, (totbytes * 1024.0/ t));
+	printf("pread %f seconds, %f MB/s\n", t, (totbytes * 1024.0/ t));
+
+	volatile float *x;
+
+	x = mmap(NULL, SIZE * sizeof(float), PROT_READ, MAP_SHARED|MAP_FILE, fd, 0);
+
+	assert(x != MAP_FAILED);
+
+	stopwatch_reset(&sw);
+	stopwatch_start(&sw);
+	for (r = 0; r < 500; r++) {
+		float sum = 0;
+		int i;
+
+		for (i = 0; i < SIZE; i++)
+			sum += x[i];
+		totbytes += sizeof(SIZE * sizeof(float));
+		sum2 += sum;
+	}
+	stopwatch_stop(&sw);
+
+	t = stopwatch_to_ns(&sw);
+
+	printf("mmap %f seconds, %f MB/s\n (%f)", t, (totbytes * 1024.0/ t), sum2);
 
 	return 0;
 }
