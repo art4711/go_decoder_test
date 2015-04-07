@@ -103,7 +103,7 @@ bc	| 624 MB/s	| 4MB	|
 ba	| 1367 MB/s	| 4MB	| 
 sl	| 2.6 MB/s	| 18MB	|
 bx	| 130 MB/s	| 4MB	|
-by	| 540 MB/s	| 540MB	|
+by	| 540 MB/s	| 4MB	|
 
 Raw data from one test run:
 
@@ -115,8 +115,8 @@ Raw data from one test run:
     BenchmarkReadFmap	    1000	   1227830 ns/op	3416.03 MB/s	      32 B/op	       1 allocs/op
     BenchmarkReadGob	      50	  51869066 ns/op	  80.86 MB/s	10384991 B/op	     320 allocs/op
     BenchmarkReadBrutal	     200	   6716936 ns/op	 624.44 MB/s	16775281 B/op	      15 allocs/op
-    BenchmarkReadBrutalA	     500	   3066435 ns/op	1367.81 MB/s	 4194304 B/op	       1 allocs/op
-    BenchmarkReadSqlite3	       1	1596527775 ns/op	   2.63 MB/s	71190440 B/op	 2097197 allocs/op
+    BenchmarkReadBrutalA     500	   3066435 ns/op	1367.81 MB/s	 4194304 B/op	       1 allocs/op
+    BenchmarkReadSqlite3       1	1596527775 ns/op	   2.63 MB/s	71190440 B/op	 2097197 allocs/op
     BenchmarkReadBinx	     100	  32981009 ns/op	 127.17 MB/s	 8388673 B/op	       4 allocs/op
     BenchmarkReadBiny	     200	   7741075 ns/op	 541.82 MB/s	 8388651 B/op	       3 allocs/op
 
