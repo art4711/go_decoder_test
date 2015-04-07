@@ -34,22 +34,35 @@ const size = 1024*1024
 const expected = float32(523902.12)
 
 type tested interface {
-	Generate([]float32)
-	OpenReader() error
+	Generate(string, []float32)
+	OpenReader(string) error
 	Reset()
 	ReadAndSum(testing.TB) float32
 	Close()
 }
 
-/*
- * File I/O with encoding/binary to read and write the data
- */
-type bi struct {
-	fname string
+
+type simpleFile struct {
 	f *os.File
 }
 
-func rawBinaryGenerate(floatarr []float32, fname string) {
+func (sf *simpleFile)OpenReader(fname string) error {
+	f, err := os.Open(fname)
+	sf.f = f
+	return err
+}
+
+func (sf *simpleFile)Close() {
+	sf.f.Close()
+}
+
+func (sf *simpleFile)Reset() {
+	sf.f.Seek(0, os.SEEK_SET)
+}
+
+type binFile struct {}
+
+func (b *binFile)Generate(fname string, floatarr []float32) {
 	file, err := os.OpenFile(fname, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		panic(err)
@@ -61,8 +74,12 @@ func rawBinaryGenerate(floatarr []float32, fname string) {
 	}	
 }
 
-func (bi *bi)Generate(floatarr []float32) {
-	rawBinaryGenerate(floatarr, bi.fname)
+/*
+ * File I/O with encoding/binary to read and write the data
+ */
+type bi struct {
+	simpleFile
+	binFile
 }
 
 func (bi *bi)ReadAndSum(tb testing.TB) float32 {
@@ -77,30 +94,15 @@ func (bi *bi)ReadAndSum(tb testing.TB) float32 {
 	return s
 }
 
-func (bi *bi) OpenReader() error {
-	f, err := os.Open(bi.fname)
-	bi.f = f
-	return err
-}
-
-func (bi *bi)Reset() {
-	bi.f.Seek(0, os.SEEK_SET)
-}
-
-func (bi *bi)Close() {
-	bi.f.Close()
-}
-
 /*
  * File I/O with encoding/json to read and write the data
  */
 type js struct {
-	fname string
-	f *os.File
+	simpleFile
 }
 
-func (js *js)Generate(floatarr []float32) {
-	file, err := os.OpenFile(js.fname, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+func (js *js)Generate(fname string, floatarr []float32) {
+	file, err := os.OpenFile(fname, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		panic(err)
 	}
@@ -122,30 +124,15 @@ func (js *js)ReadAndSum(tb testing.TB) float32 {
 	return s
 }
 
-func (js *js)OpenReader() error {
-	f, err := os.Open(js.fname)
-	js.f = f
-	return err
-}
-
-func (js *js)Reset() {
-	js.f.Seek(0, os.SEEK_SET)
-}
-
-func (js *js)Close() {
-	js.f.Close()
-}
-
 /*
  * Deflated file I/O with encoding/json to read and write the data
  */
 type jd struct {
-	fname string
-	f *os.File
+	simpleFile
 }
 
-func (jd *jd)Generate(floatarr []float32) {
-	file, err := os.OpenFile(jd.fname, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+func (jd *jd)Generate(fname string, floatarr []float32) {
+	file, err := os.OpenFile(fname, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		panic(err)
 	}
@@ -175,30 +162,12 @@ func (jd *jd)ReadAndSum(tb testing.TB) float32 {
 	return s
 }
 
-func (jd *jd)OpenReader() error {
-	f, err := os.Open(jd.fname)
-	jd.f = f
-	return err
-}
-
-func (jd *jd)Reset() {
-	jd.f.Seek(0, os.SEEK_SET)
-}
-
-func (jd *jd)Close() {
-	jd.f.Close()
-}
-
 /*
  * mmap:ed file I/O with brutal casting to read the data.
  */
 type fm struct {
-	fname string
 	fmap *filemap.Map
-}
-
-func (fm *fm)Generate(floatarr []float32) {
-	rawBinaryGenerate(floatarr, fm.fname)
+	binFile
 }
 
 func (fm *fm)ReadAndSum(tb testing.TB) float32 {
@@ -215,8 +184,8 @@ func (fm *fm)ReadAndSum(tb testing.TB) float32 {
 	return s
 }
 
-func (fm *fm)OpenReader() error {
-	f, err := os.Open(fm.fname)
+func (fm *fm)OpenReader(fname string) error {
+	f, err := os.Open(fname)
 	if err != nil {
 		return err
 	}
@@ -237,12 +206,8 @@ func (fm *fm)Close() {
  * ioutil.ReadAll with brutal casting to read the data.
  */
 type bc struct {
-	fname string
-	f *os.File
-}
-
-func (bc *bc)Generate(floatarr []float32) {
-	rawBinaryGenerate(floatarr, bc.fname)
+	simpleFile
+	binFile
 }
 
 func (bc *bc)ReadAndSum(tb testing.TB) float32 {
@@ -265,30 +230,12 @@ func (bc *bc)ReadAndSum(tb testing.TB) float32 {
 	return s
 }
 
-func (bc *bc)OpenReader() error {
-	f, err := os.Open(bc.fname)
-	bc.f = f
-	return err
-}
-
-func (bc *bc)Reset() {
-	bc.f.Seek(0, os.SEEK_SET)
-}
-
-func (bc *bc)Close() {
-	bc.f.Close()
-}
-
 /*
  * File I/O with ReadAt and brutal casting to read the data.
  */
 type ba struct {
-	fname string
 	f *os.File
-}
-
-func (ba *ba)Generate(floatarr []float32) {
-	rawBinaryGenerate(floatarr, ba.fname)
+	binFile
 }
 
 func (ba *ba)ReadAndSum(tb testing.TB) float32 {
@@ -315,14 +262,13 @@ func (ba *ba)ReadAndSum(tb testing.TB) float32 {
 	return s
 }
 
-func (ba *ba)OpenReader() error {
-	f, err := os.Open(ba.fname)
+func (ba *ba)OpenReader(fname string) error {
+	f, err := os.Open(fname)
 	ba.f = f
 	return err
 }
 
 func (ba *ba)Reset() {
-	ba.f.Seek(0, os.SEEK_SET)
 }
 
 func (ba *ba)Close() {
@@ -333,12 +279,11 @@ func (ba *ba)Close() {
  * File I/O with encoding/gob to read and write the data
  */
 type gb struct {
-	fname string
-	f *os.File
+	simpleFile
 }
 
-func (gb *gb)Generate(floatarr []float32) {
-	file, err := os.OpenFile(gb.fname, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+func (gb *gb)Generate(fname string, floatarr []float32) {
+	file, err := os.OpenFile(fname, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		panic(err)
 	}
@@ -360,31 +305,29 @@ func (gb *gb)ReadAndSum(tb testing.TB) float32 {
 	return s
 }
 
-func (gb *gb)OpenReader() error {
-	f, err := os.Open(gb.fname)
-	gb.f = f
-	return err
-}
-
-func (gb *gb)Reset() {
-	gb.f.Seek(0, os.SEEK_SET)
-}
-
-func (gb *gb)Close() {
-	gb.f.Close()
-}
-
-var (
-	binTest = &bi{fname: "float-file.bin"}
-	jsonTest = &js{fname: "float-file.json"}
-	jsonDeflateTest = &jd{fname: "float-file.json.z"}
-	fileMapTest = &fm{fname: "float-file.fm"}
-	gobTest = &gb{fname: "float-file.gob"}
-	bcTest = &bc{fname: "float-file.bc"}
-	baTest = &ba{fname: "float-file.ba"}
+const (
+	T_BI = iota
+	T_JS
+	T_JD
+	T_FM
+	T_GB
+	T_BC
+	T_BA
 )
 
-var toTest = [...]tested{ binTest, jsonTest, jsonDeflateTest, fileMapTest, gobTest, bcTest, baTest }
+type tt struct{
+	tt tested
+	fname string
+}
+var toTest = [...]tt{
+	{ &bi{}, "float-file.bin" },
+	{ &js{}, "float-file.json" },
+	{ &jd{}, "float-file.json.z" },
+	{ &fm{}, "float-file.fm" },
+	{ &gb{}, "float-file.gob" },
+	{ &bc{}, "float-file.bc" },
+	{ &ba{}, "float-file.ba" },
+}
 
 /* We're not testing encoding, just decoding. */
 func init() {
@@ -394,90 +337,93 @@ func init() {
 		floatarr[i] = rand.Float32()
 	}
 
-	for _, t := range toTest {
-		t.Generate(floatarr[:])
+	for _, te := range toTest {
+		te.tt.Generate(te.fname, floatarr[:])
 	}
 }
 
-func genericBenchmark(b *testing.B, te tested) {
+func genericBenchmark(b *testing.B, which int) {
+	te := toTest[which]
+
 	b.ReportAllocs()
-	err := te.OpenReader()
+	err := te.tt.OpenReader(te.fname)
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer te.Close()
+	defer te.tt.Close()
 	for t := 0; t < b.N; t++ {
-		te.Reset()
-		te.ReadAndSum(b)
+		te.tt.Reset()
+		te.tt.ReadAndSum(b)
 		b.SetBytes(size * 4)
 	}
 }
 
 func BenchmarkReadBinary(b *testing.B) {
-	genericBenchmark(b, binTest)
+	genericBenchmark(b, T_BI)
 }
 
 func BenchmarkReadJSON(b *testing.B) {
-	genericBenchmark(b, jsonTest)
+	genericBenchmark(b, T_JS)
 }
 
 func BenchmarkReadJDef(b *testing.B) {
-	genericBenchmark(b, jsonDeflateTest)
+	genericBenchmark(b, T_JD)
 }
 
 func BenchmarkReadFmap(b *testing.B) {
-	genericBenchmark(b, fileMapTest)
+	genericBenchmark(b, T_FM)
 }
 
 func BenchmarkReadGob(b *testing.B) {
-	genericBenchmark(b, gobTest)
+	genericBenchmark(b, T_GB)
 }
 
 func BenchmarkReadBrutal(b *testing.B) {
-	genericBenchmark(b, bcTest)
+	genericBenchmark(b, T_BC)
 }
 
 func BenchmarkReadBrutalA(b *testing.B) {
-	genericBenchmark(b, baTest)
+	genericBenchmark(b, T_BA)
 }
 
-func genericTest(t *testing.T, te tested) {
-	err := te.OpenReader()
+func genericTest(t *testing.T, which int) {
+	te := toTest[which]
+	err := te.tt.OpenReader(te.fname)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer te.Close()
-	s := te.ReadAndSum(t)
+	defer te.tt.Close()
+	s := te.tt.ReadAndSum(t)
 	if math.Abs(float64(s - expected)) > 0.005 {
 		t.Fatalf("%v != %v, did the pseudo-random generator change?", s, expected)
 	}
 }
 
 func TestSumBinary(t *testing.T) {
-	genericTest(t, binTest)
+	genericTest(t, T_BI)
 }
 
 func TestSumJSON(t *testing.T) {
-	genericTest(t, jsonTest)
+	genericTest(t, T_JS)
 }
 
 func TestSumJDef(t *testing.T) {
-	genericTest(t, jsonDeflateTest)
+	genericTest(t, T_JD)
 }
 
 func TestSumFmap(t *testing.T) {
-	genericTest(t, fileMapTest)
+	genericTest(t, T_FM)
 }
 
 func TestSumGob(t *testing.T) {
-	genericTest(t, gobTest)
+	genericTest(t, T_GB)
 }
 
 func TestSumBrutal(t *testing.T) {
-	genericTest(t, bcTest)
+	genericTest(t, T_BC)
 }
 
 func TestSumBrutalA(t *testing.T) {
-	genericTest(t, baTest)
+	genericTest(t, T_BA)
 }
 
