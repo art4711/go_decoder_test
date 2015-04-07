@@ -23,11 +23,14 @@ import (
 	"encoding/json"
 	"encoding/gob"
 	"os"
+	"fmt"
 	"io/ioutil"
 	"github.com/art4711/filemap"
 	"compress/flate"
 	"unsafe"
 	"reflect"
+	"database/sql"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const size = 1024*1024
@@ -299,6 +302,89 @@ func (gb *gb)ReadAndSum(tb testing.TB) float32 {
 	return s
 }
 
+type sl struct {
+	db *sql.DB
+}
+
+func (sl *sl)Generate(fname string, floatarr []float32) {
+	os.Remove(fname)
+	db, err := sql.Open("sqlite3", fname)
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	cStmt := "create table foo (id integer not null primary key, value float)"
+	_, err = db.Exec(cStmt)
+	if err != nil {
+		panic(err)
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		panic(err)
+	}
+	stmt, err := tx.Prepare("insert into foo(value) values (?)")
+	if err != nil {
+		panic(err)
+	}
+	for _, v := range floatarr {
+		if _, err := stmt.Exec(v); err != nil {
+			panic(err)
+		}
+	}
+	tx.Commit()
+	stmt.Close()
+}
+
+func (sl *sl)ReadAndSum(tb testing.TB) float32 {
+	stmt, err := sl.db.Prepare("select value from foo order by id")
+	if err != nil {
+		tb.Fatal(err)
+	}
+	rows, err := stmt.Query()
+	if err != nil {
+		tb.Fatal(err)
+	}
+	defer rows.Close()
+
+	floatarr := make([]float32, size)
+	i := 0
+	for rows.Next() {
+		err = rows.Scan(&floatarr[i])
+		if err != nil {
+			tb.Fatal(err)
+		}
+		i++
+	}
+
+	if i != size {
+		tb.Fatal(fmt.Errorf("rows mismatch: %d != %d", i, size));
+	}
+
+	s := float32(0)
+	for _, v := range floatarr {
+		s += v
+	}
+	return s
+}
+
+func (sl *sl)OpenReader(fname string) error {
+	db, err := sql.Open("sqlite3", fname)
+	if err != nil {
+		return err
+	}
+	sl.db = db
+	return err
+}
+
+func (sl *sl)Reset() {
+}
+
+func (sl *sl)Close() {
+	sl.db.Close()
+}
+
 const (
 	T_BI = iota
 	T_JS
@@ -307,6 +393,7 @@ const (
 	T_GB
 	T_BC
 	T_BA
+	T_SL
 )
 
 type tt struct{
@@ -321,6 +408,7 @@ var toTest = [...]tt{
 	T_GB: { &gb{}, "float-file.gob" },
 	T_BC: { &bc{}, "float-file.bc" },
 	T_BA: { &ba{}, "float-file.ba" },
+	T_SL: { &sl{}, "float-file.sl" },
 }
 
 /* We're not testing encoding, just decoding. */
@@ -380,6 +468,10 @@ func BenchmarkReadBrutalA(b *testing.B) {
 	genericBenchmark(b, T_BA)
 }
 
+func BenchmarkReadSqlite3(b *testing.B) {
+	genericBenchmark(b, T_SL)
+}
+
 func genericTest(t *testing.T, which int) {
 	te := toTest[which]
 	err := te.tt.OpenReader(te.fname)
@@ -421,3 +513,6 @@ func TestSumBrutalA(t *testing.T) {
 	genericTest(t, T_BA)
 }
 
+func TestSumSqlite3(t *testing.T) {
+	genericTest(t, T_SL)
+}
