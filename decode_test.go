@@ -24,6 +24,7 @@ import (
 	"encoding/gob"
 	"os"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"github.com/art4711/filemap"
 	"compress/flate"
@@ -302,6 +303,66 @@ func (gb *gb)ReadAndSum(tb testing.TB) float32 {
 	return s
 }
 
+/*
+ * File I/O with more or less the same thing that encoding/binary does to read and write the data
+ */
+type bx struct {
+	simpleFile
+	binFile
+}
+
+type bxcoder struct {
+	buf []byte
+}
+
+func (d *bxcoder) uint32() uint32 {
+	x := uint32(d.buf[0]) | uint32(d.buf[1]) << 8 | uint32(d.buf[2]) << 16 | uint32(d.buf[3]) << 24
+	d.buf = d.buf[4:]
+	return x
+}
+
+func (d *bxcoder)value(v reflect.Value) {
+	switch v.Kind() {
+	case reflect.Slice:
+		l := v.Len()
+		for i := 0; i < l; i++ {
+			d.value(v.Index(i))
+		}
+	case reflect.Float32:
+		v.SetFloat(float64(math.Float32frombits(d.uint32())))
+	default:
+		panic("wtf")
+	}
+}
+
+
+func (bx *bx)ReadAndSum(tb testing.TB) float32 {
+	floatarr := make([]float32, size)
+	v := reflect.ValueOf(floatarr)
+	sz := v.Len() * int(v.Type().Elem().Size())
+
+	bxc := &bxcoder{}
+	bxc.buf = make([]byte, sz)
+	if _, err := io.ReadFull(bx.f, bxc.buf); err != nil {
+		tb.Fatal(err)
+	}
+	bxc.value(v)
+
+/*
+	if err := binary.Read(bx.f, binary.LittleEndian, floatarr); err != nil {
+		tb.Fatal(err)
+	}
+*/
+	s := float32(0)
+	for _, v := range floatarr {
+		s += v
+	}
+	return s
+}
+
+/*
+ * Sqlite3 dumb storage.
+ */
 type sl struct {
 	db *sql.DB
 	stmt *sql.Stmt
@@ -396,6 +457,7 @@ const (
 	T_BC
 	T_BA
 	T_SL
+	T_BX
 )
 
 type tt struct{
@@ -411,6 +473,7 @@ var toTest = [...]tt{
 	T_BC: { &bc{}, "float-file.bc" },
 	T_BA: { &ba{}, "float-file.ba" },
 	T_SL: { &sl{}, "float-file.sl" },
+	T_BX: { &bx{}, "float-file.bx" },
 }
 
 /* We're not testing encoding, just decoding. */
@@ -474,6 +537,10 @@ func BenchmarkReadSqlite3(b *testing.B) {
 	genericBenchmark(b, T_SL)
 }
 
+func BenchmarkReadBinx(b *testing.B) {
+	genericBenchmark(b, T_BX)
+}
+
 func genericTest(t *testing.T, which int) {
 	te := toTest[which]
 	err := te.tt.OpenReader(te.fname)
@@ -517,4 +584,8 @@ func TestSumBrutalA(t *testing.T) {
 
 func TestSumSqlite3(t *testing.T) {
 	genericTest(t, T_SL)
+}
+
+func TestSumBinx(t *testing.T) {
+	genericTest(t, T_BX)
 }
