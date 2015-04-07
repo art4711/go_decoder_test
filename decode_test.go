@@ -42,18 +42,22 @@ type tested interface {
 }
 
 
-type simpleFile struct {
+type simpleFileOC struct {
 	f *os.File
 }
 
-func (sf *simpleFile)OpenReader(fname string) error {
+func (sf *simpleFileOC)OpenReader(fname string) error {
 	f, err := os.Open(fname)
 	sf.f = f
 	return err
 }
 
-func (sf *simpleFile)Close() {
+func (sf *simpleFileOC)Close() {
 	sf.f.Close()
+}
+
+type simpleFile struct {
+	simpleFileOC
 }
 
 func (sf *simpleFile)Reset() {
@@ -234,7 +238,7 @@ func (bc *bc)ReadAndSum(tb testing.TB) float32 {
  * File I/O with ReadAt and brutal casting to read the data.
  */
 type ba struct {
-	f *os.File
+	simpleFileOC
 	binFile
 }
 
@@ -262,17 +266,7 @@ func (ba *ba)ReadAndSum(tb testing.TB) float32 {
 	return s
 }
 
-func (ba *ba)OpenReader(fname string) error {
-	f, err := os.Open(fname)
-	ba.f = f
-	return err
-}
-
 func (ba *ba)Reset() {
-}
-
-func (ba *ba)Close() {
-	ba.f.Close()
 }
 
 /*
