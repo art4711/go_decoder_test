@@ -168,10 +168,13 @@ the math package):
     func Float32frombits(b uint32) float32 { return *(*float32)(unsafe.Pointer(&b)) }
 
 So deep down, even the go programmers gave up at this level. Which
-makes the whole effort completely wasted, we end up with a brutal
-cast anyway. You can't abstract away data and memory. Your code is
-running on a computer, not a mathematically and philosophically pure
-computer science device.
+makes the whole effort completely wasted, we end up with a brutal cast
+anyway. You can't abstract away data and memory. Your code is running
+on a computer, not a mathematically and philosophically pure computer
+science device. Sometimes you just need [to think about hex numbers
+and their relationships with the operating system, the hardware, and
+ancient blood
+rituals](http://research.microsoft.com/en-us/people/mickens/thenightwatch.pdf).
 
 ## Code
 
