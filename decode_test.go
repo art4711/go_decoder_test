@@ -504,6 +504,33 @@ func (sl *sl)Close() {
 	sl.db.Close()
 }
 
+type mm struct {
+	fa []float32
+}
+
+func (mm *mm) Generate(fname string, floatarr []float32) {
+	mm.fa = floatarr
+}
+
+func (mm *mm) OpenReader(string) error {
+	return nil
+}
+
+func (mm *mm) Reset() {
+}
+
+func (mm *mm) ReadAndSum(testing.TB) float32 {
+	s := float32(0)
+	for _, v := range mm.fa {
+		s += v
+	}
+	return s
+}
+
+func (mm *mm) Close() {
+}
+
+
 const (
 	T_BI = iota
 	T_JS
@@ -515,6 +542,7 @@ const (
 	T_SL
 	T_BX
 	T_BY
+	T_MM
 )
 
 type tt struct{
@@ -532,6 +560,7 @@ var toTest = [...]tt{
 	T_SL: { &sl{}, "float-file.sl" },
 	T_BX: { &bx{}, "float-file.bx" },
 	T_BY: { &by{}, "float-file.by" },
+	T_MM: { &mm{}, "" },
 }
 
 /* We're not testing encoding, just decoding. */
@@ -603,6 +632,10 @@ func BenchmarkReadBiny(b *testing.B) {
 	genericBenchmark(b, T_BY)
 }
 
+func BenchmarkReadMM(b *testing.B) {
+	genericBenchmark(b, T_MM)
+}
+
 func genericTest(t *testing.T, which int) {
 	te := toTest[which]
 	err := te.tt.OpenReader(te.fname)
@@ -654,4 +687,8 @@ func TestSumBinx(t *testing.T) {
 
 func TestSumBiny(t *testing.T) {
 	genericTest(t, T_BY)
+}
+
+func TestSumMM(t *testing.T) {
+	genericTest(t, T_MM)
 }
